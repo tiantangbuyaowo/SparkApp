@@ -60,7 +60,8 @@ public class WordCount {
                     }
                 }, 1 );
 
-        result.map(
+        result
+                .map(
                 new Function<Tuple2<String, Integer>, Tuple2<String, Integer>>() {
 
                     private static final long serialVersionUID = 1L;
