@@ -33,87 +33,50 @@ import java.util.Iterator;
 public class WordCountOnline {
 
 
-    @SuppressWarnings("deprecation")
-    public static void main(String[] args) throws Exception {
+    private static String appName = "spark.streaming.demo";
+    private static String master = "local[*]";
+    private static String host = "localhost";
+    private static int port = 9999;
 
-        SparkConf conf = new SparkConf().setMaster( "local[2]" ).setAppName( "WordCountOnline" );
-        /**
-         * 在创建streaminContext的时候 设置batch Interval
-         */
-        JavaStreamingContext jsc = new JavaStreamingContext( conf, Durations.seconds( 5 ) );
-//        JavaSparkContext sc = new JavaSparkContext(conf);
-//        JavaStreamingContext jsc = new JavaStreamingContext(sc,Durations.seconds(5));//两种办法得到StreamingContext
-//        JavaSparkContext sparkContext = jsc.sparkContext();
+    public static void main(String[] args) {
+        //初始化sparkConf
+        SparkConf sparkConf = new SparkConf().setMaster( master ).setAppName( appName );
 
-        JavaReceiverInputDStream<String> lines = jsc.socketTextStream( "localhost", 9999 );//监控socket端口9999
+        //获得JavaStreamingContext
+        JavaStreamingContext ssc = new JavaStreamingContext( sparkConf, Durations.seconds( 3 ) );
 
+        //从socket源获取数据
+        JavaReceiverInputDStream<String> lines = ssc.socketTextStream( host, port );
+
+        //拆分行成单词
         JavaDStream<String> words = lines.flatMap( new FlatMapFunction<String, String>() {
-            /**
-             *
-             */
-            private static final long serialVersionUID = 1L;
-
-            // 以前的版本好像是Iterable而不是Iterator
-            @Override
-            public Iterator<String> call(String line) throws Exception {
-                return Arrays.asList( line.split( " " ) ).iterator();
+            public Iterator<String> call(String s) throws Exception {
+                return Arrays.asList( s.split( " " ) ).iterator();
             }
         } );
 
-        JavaPairDStream<String, Integer> ones = words.mapToPair( new PairFunction<String, String, Integer>() {
-            /**
-             *
-             */
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            public Tuple2<String, Integer> call(String s) {
+        //计算每个单词出现的个数
+        JavaPairDStream<String, Integer> wordCounts = words.mapToPair( new PairFunction<String, String, Integer>() {
+            public Tuple2<String, Integer> call(String s) throws Exception {
                 return new Tuple2<String, Integer>( s, 1 );
             }
-        } );
-
-        JavaPairDStream<String, Integer> counts = ones.reduceByKey( new Function2<Integer, Integer, Integer>() {
-            /**
-             *
-             */
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            public Integer call(Integer i1, Integer i2) {
-                return i1 + i2;
+        } ).reduceByKey( new Function2<Integer, Integer, Integer>() {
+            public Integer call(Integer integer, Integer integer2) throws Exception {
+                return integer + integer2;
             }
         } );
 
-        //outputoperator类的算子
-        counts.print();
-         /*counts.foreachRDD(new VoidFunction<JavaPairRDD<String,Integer>>() {
+        //输出结果
+        wordCounts.print();
 
-            *//**
-         * 这里写的代码是在Driver端执行的
-         *//*
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            public void call(JavaPairRDD<String, Integer> pairRDD) throws Exception {
-
-                pairRDD.foreach(new VoidFunction<Tuple2<String,Integer>>() {
-
-                    *//**
-         *
-         *//*
-                    private static final long serialVersionUID = 1L;
-
-                    @Override
-                    public void call(Tuple2<String, Integer> tuple)
-                            throws Exception {
-                        System.out.println("tuple ---- "+tuple );
-                    }
-                });
-            }
-        });*/
-        jsc.start();
-        //等待spark程序被终止
-        jsc.awaitTermination();
-        jsc.stop( false );
+        //开始作业
+        ssc.start();
+        try {
+            ssc.awaitTermination();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            ssc.close();
+        }
     }
 }
